@@ -1,0 +1,2 @@
+-r requirements.txt
+adafruit-circuitpython-ads1x15==2.4.2
