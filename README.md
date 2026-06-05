@@ -53,10 +53,12 @@ from `dashboard.py`, so there is no Node build step or external CDN.
 Set `DASHBOARD_TAPO_CONTROL_ID` in `.env` to choose which dashboard button maps
 to the real P100. Valid values are:
 
-`lights`, `heater`, `water_heater`, `interior_lights`
+`lights`, `heater`, `water_heater`, `p280_charge`
 
 Only that configured control sends commands to the Tapo plug. The other controls
 are local dashboard states until you wire them to real hardware or APIs.
+Existing installs using `interior_lights` are still accepted as an alias for the
+P280 Charge button.
 
 You can also adjust the fallback display values in `.env`, including tank
 levels, temperature, battery percentage, title, host, and port.

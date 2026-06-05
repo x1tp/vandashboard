@@ -86,12 +86,16 @@ CONTROL_DEFAULTS: tuple[dict[str, Any], ...] = (
         "is_on": True,
     },
     {
-        "id": "interior_lights",
-        "label": "Interior Lights",
-        "icon": "interior",
+        "id": "p280_charge",
+        "label": "P280 Charge",
+        "icon": "power",
         "is_on": True,
     },
 )
+
+CONTROL_ID_ALIASES = {
+    "interior_lights": "p280_charge",
+}
 
 
 def env_int(name: str, default: int) -> int:
@@ -213,8 +217,9 @@ def build_config() -> DashboardConfig:
     load_env_file(ENV_FILE)
 
     tapo_control_id = os.environ.get(
-        "DASHBOARD_TAPO_CONTROL_ID", "interior_lights"
+        "DASHBOARD_TAPO_CONTROL_ID", "p280_charge"
     ).strip()
+    tapo_control_id = CONTROL_ID_ALIASES.get(tapo_control_id, tapo_control_id)
     control_ids = {control["id"] for control in CONTROL_DEFAULTS}
     if tapo_control_id not in control_ids:
         valid = ", ".join(sorted(control_ids))
