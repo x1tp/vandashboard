@@ -15,6 +15,7 @@ const aferiyState = document.querySelector("#aferiy-state");
 const connectionStatus = document.querySelector("#connection-status");
 const dashboardView = document.querySelector("#dashboard-view");
 const temperatureView = document.querySelector("#temperature-view");
+const powerView = document.querySelector("#power-view");
 const temperatureChart = document.querySelector("#temperature-chart");
 const temperatureEmpty = document.querySelector("#temperature-empty");
 const temperatureHistoryMeta = document.querySelector("#temperature-history-meta");
@@ -27,6 +28,16 @@ const settingsView = document.querySelector("#settings-view");
 const settingsGrid = document.querySelector("#settings-grid");
 const settingsBackButton = document.querySelector("#settings-back-button");
 const navItems = document.querySelectorAll(".nav-item[data-view-target]");
+const powerConnectionPill = document.querySelector("#power-connection-pill");
+const powerCharge = document.querySelector("#power-charge");
+const powerInput = document.querySelector("#power-input");
+const powerOutput = document.querySelector("#power-output");
+const powerRuntime = document.querySelector("#power-runtime");
+const powerOutputGrid = document.querySelector("#power-output-grid");
+const powerAcVoltage = document.querySelector("#power-ac-voltage");
+const powerAcFrequency = document.querySelector("#power-ac-frequency");
+const powerBluetooth = document.querySelector("#power-bluetooth");
+const powerUpdated = document.querySelector("#power-updated");
 
 // Screensaver Elements
 const screensaverOverlay = document.querySelector("#screensaver-overlay");
@@ -56,6 +67,7 @@ let temperatureHistoryError = null;
 let temperatureHistoryLoading = false;
 let temperatureHistoryRange = "day";
 let statusFetchInFlight = false;
+let pendingAferiyOutput = null;
 
 const STATUS_REFRESH_MS = 10000;
 const STATUS_TIMEOUT_MS = 25000;
@@ -67,6 +79,37 @@ const temperatureRangeTitles = {
 };
 
 const temperatureRangeEndpoints = new Set(Object.keys(temperatureRangeTitles));
+
+const aferiyOutputControls = [
+  {
+    id: "ac",
+    label: "230V AC",
+    detail: "Inverter",
+    stateKey: "ac_output_on",
+    iconName: "power",
+  },
+  {
+    id: "usb",
+    label: "USB",
+    detail: "USB ports",
+    stateKey: "usb_output_on",
+    iconName: "battery",
+  },
+  {
+    id: "dc",
+    label: "12V DC",
+    detail: "DC output",
+    stateKey: "dc_output_on",
+    iconName: "interior",
+  },
+  {
+    id: "light",
+    label: "Light",
+    detail: "Lamp",
+    stateKey: "led_output_on",
+    iconName: "light",
+  },
+];
 
 // Screensaver States
 let screensaverActive = false;
@@ -238,6 +281,33 @@ function humidity(value) {
   }
 
   return `${Math.round(number)}%`;
+}
+
+function minutesDetail(value) {
+  const number = Number(value);
+  if (!Number.isFinite(number) || number <= 0) {
+    return "--";
+  }
+
+  const hours = Math.floor(number / 60);
+  const minutes = Math.round(number % 60);
+  if (hours <= 0) {
+    return `${minutes}m`;
+  }
+
+  return minutes > 0 ? `${hours}h ${minutes}m` : `${hours}h`;
+}
+
+function timestampTime(value) {
+  const number = Number(value);
+  if (!Number.isFinite(number) || number <= 0) {
+    return "--";
+  }
+
+  return new Intl.DateTimeFormat([], {
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(new Date(number * 1000));
 }
 
 function settingsPill(text, tone = "neutral") {
@@ -435,6 +505,7 @@ function renderPowerDeviceSettings(devices) {
             { label: "AC output", value: yesNo(live?.ac_output_on) },
             { label: "DC output", value: yesNo(live?.dc_output_on) },
             { label: "USB output", value: yesNo(live?.usb_output_on) },
+            { label: "Light output", value: yesNo(live?.led_output_on) },
           ];
 
           if (device.source === "mqtt" && device.mqtt) {
@@ -842,8 +913,9 @@ function setActiveView(view) {
   if (
     !dashboardView
     || !temperatureView
+    || !powerView
     || !settingsView
-    || !["dashboard", "temperature", "settings"].includes(view)
+    || !["dashboard", "temperature", "power", "settings"].includes(view)
   ) {
     return;
   }
@@ -851,6 +923,7 @@ function setActiveView(view) {
   activeView = view;
   dashboardView.hidden = view !== "dashboard";
   temperatureView.hidden = view !== "temperature";
+  powerView.hidden = view !== "power";
   settingsView.hidden = view !== "settings";
 
   navItems.forEach((button) => {
@@ -873,6 +946,10 @@ function setActiveView(view) {
   if (view === "temperature") {
     renderTemperatureView();
     fetchTemperatureHistory();
+  }
+
+  if (view === "power") {
+    renderPowerView();
   }
 }
 
@@ -1079,6 +1156,82 @@ function renderAferiy(device) {
   updateTextIfChanged(aferiyState, state);
 }
 
+function renderPowerView() {
+  if (!powerView) {
+    return;
+  }
+
+  const device = (lastData?.power_devices || [])
+    .find((item) => item.id === "aferiy_p280");
+  const isOnline = Boolean(device && device.connected !== false);
+  const source = sourceLabel(device?.source || "local");
+  const statusText = isOnline ? "ONLINE" : "OFFLINE";
+
+  if (powerConnectionPill) {
+    powerConnectionPill.textContent = `${statusText} / ${source}`;
+    powerConnectionPill.classList.toggle("is-online", isOnline);
+    powerConnectionPill.classList.toggle("is-offline", !isOnline);
+  }
+
+  updateTextIfChanged(
+    powerCharge,
+    Number.isFinite(Number(device?.percent)) ? `${capPercent(device.percent)}%` : "--%",
+  );
+  updateTextIfChanged(powerInput, watt(device?.input_w));
+  updateTextIfChanged(powerOutput, watt(device?.output_w));
+  updateTextIfChanged(powerRuntime, minutesDetail(device?.remaining_min));
+  updateTextIfChanged(powerAcVoltage, settingValue(device?.ac_output_v, " V"));
+  updateTextIfChanged(powerAcFrequency, settingValue(device?.ac_output_hz, " Hz"));
+
+  const bluetoothText = device?.ble_name
+    ? `${device.ble_name}${Number.isFinite(Number(device.ble_rssi)) ? ` ${device.ble_rssi} dBm` : ""}`
+    : settingValue(device?.ble_address);
+  updateTextIfChanged(powerBluetooth, bluetoothText);
+  updateTextIfChanged(powerUpdated, timestampTime(device?.updated_at));
+
+  if (!powerOutputGrid) {
+    return;
+  }
+
+  const canControl = Boolean(isOnline && device?.source === "ble");
+  const requestPending = Boolean(pendingAferiyOutput);
+  powerOutputGrid.innerHTML = aferiyOutputControls
+    .map((control) => {
+      const state = device?.[control.stateKey];
+      const isOn = state === true;
+      const isPending = pendingAferiyOutput === control.id;
+      const stateText = state === true ? "ON" : state === false ? "OFF" : "--";
+      const disableOn = !canControl || requestPending || isOn;
+      const disableOff = !canControl || requestPending || state === false;
+
+      return `
+        <article class="power-output-module ${isOn ? "is-on" : "is-off"} ${isPending ? "is-pending" : ""}">
+          <div class="power-output-main">
+            <span class="power-output-icon" aria-hidden="true">${icon(control.iconName)}</span>
+            <div>
+              <h3>${escapeHtml(control.label)}</h3>
+              <p>${escapeHtml(control.detail)}</p>
+            </div>
+            <span class="power-output-state">${stateText}</span>
+          </div>
+          <div class="power-output-actions">
+            <button type="button" data-aferiy-output="${control.id}" data-aferiy-action="on" ${disableOn ? "disabled" : ""}>ON</button>
+            <button type="button" data-aferiy-output="${control.id}" data-aferiy-action="off" ${disableOff ? "disabled" : ""}>OFF</button>
+          </div>
+        </article>
+      `;
+    })
+    .join("");
+
+  powerOutputGrid
+    .querySelectorAll("[data-aferiy-output][data-aferiy-action]")
+    .forEach((button) => {
+      button.addEventListener("click", () => {
+        setAferiyOutput(button.dataset.aferiyOutput, button.dataset.aferiyAction);
+      });
+    });
+}
+
 function render(data) {
   lastData = data;
 
@@ -1118,6 +1271,10 @@ function render(data) {
 
   if (activeView === "temperature") {
     renderTemperatureView();
+  }
+
+  if (activeView === "power") {
+    renderPowerView();
   }
 }
 
@@ -1237,6 +1394,40 @@ async function toggleControl(controlId) {
     if (lastData) {
       renderControls(lastData.controls || []);
     }
+  }
+}
+
+async function setAferiyOutput(outputId, action) {
+  if (!outputId || !action || pendingAferiyOutput) {
+    return;
+  }
+
+  pendingAferiyOutput = outputId;
+  renderPowerView();
+
+  try {
+    const response = await fetch(
+      `/api/power/aferiy_p280/outputs/${encodeURIComponent(outputId)}`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ action }),
+      },
+    );
+
+    if (!response.ok) {
+      const body = await response.json().catch(() => ({}));
+      throw new Error(body.error || `AFERIY request failed: ${response.status}`);
+    }
+
+    await fetchStatus();
+  } catch (error) {
+    setConnection(error.message, true);
+  } finally {
+    pendingAferiyOutput = null;
+    renderPowerView();
   }
 }
 

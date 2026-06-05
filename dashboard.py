@@ -1018,6 +1018,32 @@ class DashboardState:
                 }
             }
 
+    def update_aferiy_output(self, output_id: str, action: str) -> dict[str, Any]:
+        device = next(
+            (
+                item
+                for item in self.config.power_devices
+                if item.get("type") == "aferiy_p280"
+            ),
+            None,
+        )
+        if device is None:
+            raise KeyError("AFERIY P280 is not configured.")
+
+        config = device["config"]
+        if config.source != "ble":
+            raise RuntimeError("AFERIY output controls require Bluetooth source.")
+
+        reader = self.aferiy_readers.get("aferiy_p280")
+        if not isinstance(reader, AferiyBleReader):
+            raise RuntimeError("AFERIY BLE reader is not running.")
+
+        payload = reader.set_output(output_id, action)
+        return {
+            "device": payload,
+            "power_devices": self.power_payload(),
+        }
+
 
 class DashboardHandler(SimpleHTTPRequestHandler):
     server: "DashboardServer"
@@ -1060,6 +1086,15 @@ class DashboardHandler(SimpleHTTPRequestHandler):
             self.handle_control(parts[2])
             return
 
+        if (
+            len(parts) == 5
+            and parts[:2] == ["api", "power"]
+            and parts[2] == "aferiy_p280"
+            and parts[3] == "outputs"
+        ):
+            self.handle_aferiy_output(parts[4])
+            return
+
         self.write_json(
             {"error": "Not found."},
             status=HTTPStatus.NOT_FOUND,
@@ -1071,6 +1106,26 @@ class DashboardHandler(SimpleHTTPRequestHandler):
             action = str(payload.get("action", "toggle")).lower()
             response = self.server.dashboard_state.update_control(
                 control_id,
+                action,
+            )
+            self.write_json(response)
+        except KeyError as exc:
+            self.write_json(
+                {"error": str(exc)},
+                status=HTTPStatus.NOT_FOUND,
+            )
+        except Exception as exc:
+            self.write_json(
+                {"error": str(exc)},
+                status=HTTPStatus.BAD_REQUEST,
+            )
+
+    def handle_aferiy_output(self, output_id: str) -> None:
+        try:
+            payload = self.read_json_body()
+            action = str(payload.get("action", "toggle")).lower()
+            response = self.server.dashboard_state.update_aferiy_output(
+                output_id,
                 action,
             )
             self.write_json(response)

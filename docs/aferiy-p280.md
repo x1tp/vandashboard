@@ -56,7 +56,7 @@ Restart the dashboard after editing `.env`.
 ## Bluetooth Protocol
 
 The dashboard connects to the BrightEMS-compatible BLE GATT service and polls
-read-only Modbus-style registers:
+Modbus-style registers:
 
 ```text
 Service: 0000a002-0000-1000-8000-00805f9b34fb
@@ -64,8 +64,9 @@ Write:   0000c304-0000-1000-8000-00805f9b34fb
 Notify:  0000c305-0000-1000-8000-00805f9b34fb
 ```
 
-It only reads telemetry. It does not write output-control commands to the power
-station.
+When `DASHBOARD_AFERIY_SOURCE=ble`, the bottom Power page can also send
+single-register write commands for the USB, 12V DC, 230V AC, and light outputs.
+Output controls are disabled for the static and BrightEMS MQTT sources.
 
 ## MQTT Alternative
 

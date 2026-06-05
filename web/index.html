@@ -52,8 +52,8 @@
         <path d="m13 2-8 12h7l-1 8 8-12h-7l1-8Z"></path>
       </symbol>
       <symbol id="icon-settings" viewBox="0 0 24 24">
-        <path d="M12 15.3a3.3 3.3 0 1 0 0-6.6 3.3 3.3 0 0 0 0 6.6Z"></path>
-        <path d="M19.4 15a8 8 0 0 0 .1-1l2-1.5-2-3.5-2.4 1a8 8 0 0 0-1.7-1L15 6.5h-4L10.6 9a8 8 0 0 0-1.7 1l-2.4-1-2 3.5L6.5 14a8 8 0 0 0 .1 1L4.5 16.5l2 3.5 2.4-1a8 8 0 0 0 1.7 1l.4 2.5h4l.4-2.5a8 8 0 0 0 1.7-1l2.4 1 2-3.5L19.4 15Z"></path>
+        <circle cx="12" cy="12" r="3"></circle>
+        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
       </symbol>
       <symbol id="icon-battery" viewBox="0 0 24 24">
         <path d="M3 7h16v10H3z"></path>
@@ -187,6 +187,59 @@
         </section>
       </main>
 
+      <main class="power-view" id="power-view" hidden>
+        <section class="hud-panel power-panel" aria-labelledby="power-title">
+          <div class="panel-heading power-heading">
+            <span class="temperature-heading-icon" aria-hidden="true">
+              <svg><use href="#icon-power"></use></svg>
+            </span>
+            <h2 id="power-title">AFERIY P280</h2>
+            <div class="power-connection-pill" id="power-connection-pill">--</div>
+          </div>
+          <div class="power-content">
+            <section class="power-summary" aria-label="AFERIY telemetry">
+              <article class="power-summary-tile power-summary-charge">
+                <span>Charge</span>
+                <strong id="power-charge">--%</strong>
+              </article>
+              <article class="power-summary-tile">
+                <span>Input</span>
+                <strong id="power-input">-- W</strong>
+              </article>
+              <article class="power-summary-tile">
+                <span>Output</span>
+                <strong id="power-output">-- W</strong>
+              </article>
+              <article class="power-summary-tile">
+                <span>Runtime</span>
+                <strong id="power-runtime">--</strong>
+              </article>
+            </section>
+            <section class="power-control-panel" aria-label="AFERIY outputs">
+              <div class="power-control-grid" id="power-output-grid"></div>
+            </section>
+            <section class="power-detail-grid" aria-label="AFERIY details">
+              <article>
+                <span>AC Voltage</span>
+                <strong id="power-ac-voltage">-- V</strong>
+              </article>
+              <article>
+                <span>AC Frequency</span>
+                <strong id="power-ac-frequency">-- Hz</strong>
+              </article>
+              <article>
+                <span>Bluetooth</span>
+                <strong id="power-bluetooth">--</strong>
+              </article>
+              <article>
+                <span>Updated</span>
+                <strong id="power-updated">--</strong>
+              </article>
+            </section>
+          </div>
+        </section>
+      </main>
+
       <main class="settings-view" id="settings-view" hidden>
         <section class="hud-panel settings-panel" aria-labelledby="settings-title">
           <div class="panel-heading settings-heading">
@@ -224,7 +277,7 @@
           <button class="nav-item" type="button" aria-label="Water">
             <svg><use href="#icon-water"></use></svg>
           </button>
-          <button class="nav-item" type="button" aria-label="Power">
+          <button class="nav-item" type="button" aria-label="AFERIY power controls" data-view-target="power">
             <svg><use href="#icon-power"></use></svg>
           </button>
           <button class="nav-item" type="button" aria-label="Settings" data-view-target="settings">

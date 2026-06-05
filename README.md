@@ -124,7 +124,9 @@ SWITCHBOT_BLE_SCAN_SECONDS=10
 The dashboard can also show the AFERIY P280 as a power device. It starts with
 static fallback values and can be switched to local Bluetooth polling so the
 power station does not need to stay connected to Wi-Fi. BrightEMS local MQTT is
-still available as a fallback option. See [docs/aferiy-p280.md](docs/aferiy-p280.md).
+still available as a fallback option. When Bluetooth is enabled, the bottom
+Power button opens controls for the P280 USB, 12V DC, 230V AC, and light
+outputs. See [docs/aferiy-p280.md](docs/aferiy-p280.md).
 
 For automation:
 

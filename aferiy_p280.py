@@ -21,6 +21,18 @@ BLE_NOTIFY_CHAR_UUID = "0000c305-0000-1000-8000-00805f9b34fb"
 BLE_READ_RESPONSE_BYTES = 168
 BLE_WRITE_RESPONSE_BYTES = 8
 BLE_NAME_PREFIXES = ("POWER", "FOSSIBOT", "AFERIY", "SYDPOWER")
+CONTROL_REGISTERS = {
+    "usb": 24,
+    "dc": 25,
+    "ac": 26,
+    "light": 27,
+}
+CONTROL_PAYLOAD_KEYS = {
+    "usb": "usb_output_on",
+    "dc": "dc_output_on",
+    "ac": "ac_output_on",
+    "light": "led_output_on",
+}
 DEFAULT_DEVICE_ID = ""
 DEFAULT_LABEL = "AFERIY P280"
 DEFAULT_MODEL = "P280"
@@ -187,6 +199,7 @@ def static_payload(config: AferiyConfig) -> dict[str, Any]:
         "ac_output_on": config.ac_output_on,
         "dc_output_on": config.dc_output_on,
         "usb_output_on": config.usb_output_on,
+        "led_output_on": False,
         "updated_at": None,
     }
 
@@ -469,6 +482,9 @@ class AferiyBleReader:
         self.discovered_address: str | None = None
         self.discovered_name: str | None = None
         self.discovered_rssi: int | None = None
+        self.loop: asyncio.AbstractEventLoop | None = None
+        self.client: Any | None = None
+        self.command_lock: asyncio.Lock | None = None
 
     def start(self) -> None:
         if self.thread and self.thread.is_alive():
@@ -513,8 +529,13 @@ class AferiyBleReader:
             target,
             timeout=self.config.ble_timeout_s,
         ) as client:
+            loop = asyncio.get_running_loop()
+            command_lock = asyncio.Lock()
             with self.lock:
                 self.connected = True
+                self.client = client
+                self.loop = loop
+                self.command_lock = command_lock
                 self.last_error = None
                 self.rx_buffer.clear()
 
@@ -548,6 +569,9 @@ class AferiyBleReader:
 
         with self.lock:
             self.connected = False
+            self.client = None
+            self.loop = None
+            self.command_lock = None
 
     async def resolve_device(self, scanner: Any) -> Any:
         if self.config.ble_address:
@@ -598,10 +622,76 @@ class AferiyBleReader:
             return [(device, None) for device in devices]
 
     async def write_command(self, client: Any, command: list[int]) -> None:
-        await client.write_gatt_char(
-            self.config.ble_write_char_uuid,
-            bytes(command),
-            response=False,
+        lock = self.command_lock
+        if lock is None:
+            await client.write_gatt_char(
+                self.config.ble_write_char_uuid,
+                bytes(command),
+                response=False,
+            )
+            return
+
+        async with lock:
+            await client.write_gatt_char(
+                self.config.ble_write_char_uuid,
+                bytes(command),
+                response=False,
+            )
+
+    def set_output(self, output_id: str, action: str) -> dict[str, Any]:
+        if output_id not in CONTROL_REGISTERS:
+            valid = ", ".join(sorted(CONTROL_REGISTERS))
+            raise ValueError(f"Unknown AFERIY output. Use one of: {valid}.")
+
+        if action not in {"on", "off", "toggle"}:
+            raise ValueError("Action must be on, off, or toggle.")
+
+        with self.lock:
+            client = self.client
+            loop = self.loop
+            latest = dict(self.last_payload or {})
+            connected = self.connected
+            last_error = self.last_error
+
+        if not connected or client is None or loop is None:
+            raise RuntimeError(last_error or "AFERIY BLE is not connected.")
+
+        if action == "toggle":
+            current = latest.get(CONTROL_PAYLOAD_KEYS[output_id])
+            if current is None:
+                raise RuntimeError(
+                    "Current output state is unknown. Wait for telemetry "
+                    "then try again."
+                )
+            value = 0 if current else 1
+        else:
+            value = 1 if action == "on" else 0
+
+        future = asyncio.run_coroutine_threadsafe(
+            self.write_output_command(client, output_id, value),
+            loop,
+        )
+        future.result(timeout=self.config.ble_timeout_s)
+        return self.payload()
+
+    async def write_output_command(
+        self,
+        client: Any,
+        output_id: str,
+        value: int,
+    ) -> None:
+        await self.write_command(
+            client,
+            get_write_modbus(
+                REGISTER_MODBUS_ADDRESS,
+                CONTROL_REGISTERS[output_id],
+                value,
+            ),
+        )
+        await asyncio.sleep(0.5)
+        await self.write_command(
+            client,
+            get_read_input_modbus(REGISTER_MODBUS_ADDRESS, REGISTER_COUNT),
         )
 
     def on_notification(self, _sender: Any, data: bytearray) -> None:
@@ -722,6 +812,7 @@ def base_payload(config: AferiyConfig, source: str) -> dict[str, Any]:
         "ac_output_on": None,
         "dc_output_on": None,
         "usb_output_on": None,
+        "led_output_on": None,
         "updated_at": None,
     }
 
@@ -850,3 +941,7 @@ def get_read_modbus(address: int, register_count: int) -> list[int]:
 
 def get_read_input_modbus(address: int, register_count: int) -> list[int]:
     return build_modbus_command(address, 4, 0, register_count)
+
+
+def get_write_modbus(address: int, register: int, value: int) -> list[int]:
+    return build_modbus_command(address, 6, register, value)
